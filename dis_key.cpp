@@ -1,5 +1,5 @@
-////////////////           TM1628驱动库的应用库      V0.5       //////////////
-////////////////     Copyright 2016-2017      by changser       //////////////
+////////////////           TM1628驱动库的应用库      V0.6       //////////////
+////////////////     Copyright 2016-2018      by changser       //////////////
 ////////////////           changser@139.com                     ///////////////////////////
  
 #include  "dis_key.h"
@@ -245,12 +245,13 @@ void APP_TM1628::to_led_char(int8_t ch , uint8_t dot, uint8_t No  )
   to_led_seg(temp, No);
 }
 
-//功能：32位整数数字作为10进制字符串显示。以个位为基准。加入小数点处理。
+//功能：32位整数数字作为10进制字符串显示。以个位为基准，在选定位置及左边显示。
+//      物理显示器排序为从左到右是LED1~LED9。加入小数点处理。
 //输入：
 //signed long val:    要转换的数。long型为10位，一般都够了。
-//uint8_t dot:    决定小数点在val上的位置，从个数开始，取值为DOT1，则个位有小数点。
-//               NO_DOT(0)、DOT1(1)、DOT2(2)、DOT3(3)...DOT9(9)，NO_DOT(即0)表示无小数点。
-//uint8_t No:     决定个位在物理LED的位置，为LED1(1)...LED9(9)
+//uint8_t dot:    决定小数点在val上的位置，从个位数开始，取值为DOT1，则个位有小数点。
+//                NO_DOT(0)、DOT1(1)、DOT2(2)、DOT3(3)...DOT9(9)，NO_DOT(即0)表示无小数点。
+//uint8_t No:     决定个位在物理LED的位置，为LED1(1)...LED9(9)。高位显示在左边，LED序号值比个位的小。
 //uint8_t len:    本次显示用到的LED的个数
 //输出：
 //可能有APP_TM1628::twoCA，TM1628显示寄存器
@@ -335,9 +336,9 @@ uint8_t APP_TM1628::to_led(int32_t val, uint8_t dot , uint8_t No , uint8_t len )
   return err;
 }
 
-//功能：16位整数数字作为10进制字符串显示。以小数位为基准。缺省小数点后两位。
+//功能：16位整数数字作为10进制字符串显示。以个位为基准。
 //输入：
-//signed float val:    要转换的数。long型为10位，一般都够了。
+//int16_t number:    要转换的数。long型为10位，一般都够了。
 //uint8_t dot:    决定小数点在val上的位置，从个数开始，取值为DOT1，则个位有小数点。
 //               NO_DOT(0)、DOT1(1)、DOT2(2)、DOT3(3)...DOT9(9)，NO_DOT(即0)表示无小数点。
 //uint8_t No:     决定个位在物理LED的位置，为LED1(1)...LED9(9)
@@ -350,8 +351,7 @@ uint8_t  APP_TM1628::to_led(int16_t number, uint8_t dot , uint8_t No  , uint8_t 
   return to_led((int32_t)number, dot, No, len);
 }
 
-
-//功能：将浮点数当作字符串在TM1628驱动下显示出来。以小数位为基准。缺省小数点后两位。
+//功能：将浮点数当作字符串在TM1628驱动下显示出来。以小数位为基准，此时DOT值为有几个小数位。缺省小数点后两位即DOT2。
 //输入：
 //signed float val:    要转换的数。ARDUINO AVR中，双精度浮点double与单精度float相同，都占4字节
 //                     long型为10位，一般都够了。
@@ -380,11 +380,14 @@ void APP_TM1628::to_led_flash()
   delay_ms(1000);
 }
 
-//功能：取键子函数，结果存放于键盘缓冲区中，对键的四个动作都有描述
+//功能：取键子函数，结果存放于键盘缓冲区中keys[20]中，对键的四个动作都有描述
+//        如果存在按键映射表，只处理表中的几个键，keys[i]中序号i=物理按键序号-1
 //采用的方法是：基于原先的键动作状态：按下、按下保持及时间、抬起、未按下保持及时间
 //              根据新的key_state[]，得到新状态。时间是计数。运行一次计算一次。
-//输入：调用read_keyR()函数，再得key_state[KEY_NUM]
-//输出：keys[KEY_NUM]
+//输入：  调用read_keyR()函数，再得key_state[key_num]
+//        其中，key_num是类的私有变量，初始值是20，设置映射时为物理按键个数。
+//        keys[key_num]
+//输出：keys[key_num]--更新
 uint8_t APP_TM1628::get_key(void)
 {
   uint8_t i;
@@ -392,7 +395,7 @@ uint8_t APP_TM1628::get_key(void)
   read_keyR();    //得最新的键状态 key_R[5]
   //将TM1628的5字节的键盘缓冲区有实际物理键盘的状态摘出来
   uint8_t line, column, j;
-  for (i = 0; i < key_num; i++)
+  for (i = 0; i < key_num; i++)   //key_num是类的私有变量，初始值是20，设置映射时为物理按键个数。 
   {
     //i为物理键盘序号-1，转换为逻辑键盘序号-1，即key_table[0]对应的是物理键号1，存的是逻辑键号，比如1
     if (key_table_P == NULL) j = i; //若按键顺序没改变
@@ -456,35 +459,36 @@ uint8_t APP_TM1628::get_key(void)
 
 
 /**************关于数字加减键的处理****************/
-//功能：数字加减键处理子程序。对max_or_min<10进行了判断。
+//功能：按键操作将某数进行加减的子程序。根据按键时长进行连续加减、加速加减、十倍百倍加减。
+//       对max_or_min<10进行了判断。
 //输入：
-//uint8_t key_No： 	从0到key_num(不含)中的一个键号.key_num由类功能set_key_table()设置
+//uint8_t key_No： 	从1到key_num(含)中的一个键号.key_num由类功能set_key_table()设置
 //uint16_t variable： 	对variable值进行数字加减，最后返回之
 //最好用指针，直接指向进行加减的变量，不用返回。
 //uint8_t max_or_min:	最大或最小限值
-//uint8_t add： 		非0则加；为0则减
+//uint8_t ISadd： 		非0则加；为0则减
 //uint8_t loop：      非0则进行循环加减数，为0不徨。暂无此功能。
 //输出：返回处理过的variable
 uint16_t APP_TM1628::key_add_or_sub(uint8_t key_No, uint16_t variable,
-                                        uint16_t max_or_min, uint8_t add, uint8_t loop)
+                                        uint16_t max_or_min, uint8_t ISadd, uint8_t loop)
 {
   uint16_t variable1;
   variable1 = variable;
-  if (keys[key_No].key_buffer != NO_PRESS)
+  if (keys[key_No-1].key_buffer != NO_PRESS)
   {
-    if (add)
+    if (ISadd)
     {
-      if (keys[key_No].key_buffer == KEY_DOWN)
+      if (keys[key_No-1].key_buffer == KEY_DOWN)
       {
         if (variable1 < max_or_min)
         { variable1++;
         };
       };
-      if (keys[key_No].key_buffer == KEY_KEEP)
+      if (keys[key_No-1].key_buffer == KEY_KEEP)
       {
-        if (keys[key_No].key_time >= key_level3)
+        if (keys[key_No-1].key_time >= key_level3)
         {
-          if (fmod((keys[key_No].key_time - key_level3), key_level3_num) == 0)
+          if (fmod((keys[key_No-1].key_time - key_level3), key_level3_num) == 0)
           {
             if (max_or_min > 10) //如果达不到此要求就不进行加10操作
             {
@@ -499,11 +503,11 @@ uint16_t APP_TM1628::key_add_or_sub(uint8_t key_No, uint16_t variable,
             };
           };
         }
-        else //不是 (key_time[key_No]>=key_level3)
+        else //不是 (key_time[key_No-1]>=key_level3)
         {
-          if (keys[key_No].key_time >= key_level2)
+          if (keys[key_No-1].key_time >= key_level2)
           {
-            if (fmod((keys[key_No].key_time - key_level2), key_level2_num) == 0)
+            if (fmod((keys[key_No-1].key_time - key_level2), key_level2_num) == 0)
             {
               if (variable1 < max_or_min)
               { variable1++;
@@ -512,32 +516,32 @@ uint16_t APP_TM1628::key_add_or_sub(uint8_t key_No, uint16_t variable,
           }
           else //不是(key_time[key_No]>=key_level2)
           {
-            if (keys[key_No].key_time >= key_level1)
+            if (keys[key_No-1].key_time >= key_level1)
             {
-              if (fmod((keys[key_No].key_time - key_level1), key_level1_num) == 0)
+              if (fmod((keys[key_No-1].key_time - key_level1), key_level1_num) == 0)
               {
                 if (variable1 < max_or_min)
                 { variable1++;
                 };
               };
             };
-          }//不是(key_time[key_No]>=key_level2)的结束
-        }; //不是 (key_time[key_No]>=key_level3)的结束
-      };//if (key_buffer[key_No]==KEY_KEEP)的结束
+          }//不是(key_time[key_No-1]>=key_level2)的结束
+        }; //不是 (key_time[key_No-1]>=key_level3)的结束
+      };//if (key_buffer[key_No-1]==KEY_KEEP)的结束
     }//加计数结束
     else //减计数
     {
-      if (keys[key_No].key_buffer == KEY_DOWN)
+      if (keys[key_No-1].key_buffer == KEY_DOWN)
       {
         if (variable1 > max_or_min)
         { variable1--;
         };
       };
-      if (keys[key_No].key_buffer == KEY_KEEP)
+      if (keys[key_No-1].key_buffer == KEY_KEEP)
       {
-        if (keys[key_No].key_time >= key_level3)
+        if (keys[key_No-1].key_time >= key_level3)
         {
-          if (fmod((keys[key_No].key_time - key_level3), key_level3_num) == 0)
+          if (fmod((keys[key_No-1].key_time - key_level3), key_level3_num) == 0)
           {
             if (variable1 >= max_or_min + 10)
             {
@@ -549,33 +553,33 @@ uint16_t APP_TM1628::key_add_or_sub(uint8_t key_No, uint16_t variable,
             };
           };
         }
-        else //不是 (key_time[key_No]>=key_level3)
+        else //不是 (key_time[key_No-1]>=key_level3)
         {
-          if (keys[key_No].key_time >= key_level2)
+          if (keys[key_No-1].key_time >= key_level2)
           {
-            if (fmod((keys[key_No].key_time - key_level2), key_level2_num) == 0)
+            if (fmod((keys[key_No-1].key_time - key_level2), key_level2_num) == 0)
             {
               if (variable1 > max_or_min)
               { variable1--;
               };
             };
           }
-          else //不是(key_time[key_No]>=key_level2)
+          else //不是(key_time[key_No-1]>=key_level2)
           {
-            if (keys[key_No].key_time >= key_level1)
+            if (keys[key_No-1].key_time >= key_level1)
             {
-              if (fmod((keys[key_No].key_time - key_level1), key_level1_num) == 0)
+              if (fmod((keys[key_No-1].key_time - key_level1), key_level1_num) == 0)
               {
                 if (variable1 > max_or_min)
                 { variable1--;
                 };
               };
             };
-          }//不是(key_time[key_No]>=key_level2)的结束
-        }; //不是 (key_time[key_No]>=key_level3)的结束
-      };//if (key_buffer[key_No]==KEY_KEEP)的结束
+          }//不是(key_time[key_No-1]>=key_level2)的结束
+        }; //不是 (key_time[key_No-1]>=key_level3)的结束
+      };//if (key_buffer[key_No-1]==KEY_KEEP)的结束
     };//减计数结束
-  };//if (key_buffer[key_No]!=NO_PRESS)的结束
+  };//if (key_buffer[key_No-1]!=NO_PRESS)的结束
   return variable1;
 }
 

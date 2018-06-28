@@ -1,5 +1,5 @@
-////////////////           TM1628驱动库的应用库      V0.5       //////////////
-////////////////     Copyright 2016-2017      by changser       //////////////
+////////////////           TM1628驱动库的应用库      V0.6       //////////////
+////////////////     Copyright 2016-2018      by changser       //////////////
 ////////////////           changser@139.com                     //////////////
  
 #ifndef __DIS_KEY_H__
@@ -9,7 +9,7 @@
 
 ////***************提供给外部的接口***************************///////////
 //1、提供给外部的宏////////////////////////////////////
-//定义小数点位置常数（物理位置，从左到右1~9。映射前的。跟寄存器无关）
+//定义小数点位置常数（某数如987654321，从个位为1开始数。如果是2，则98765432.1。跟显示器序号无关）
 #define NO_DOT 0
 #define DOT   0XFF  //显示一位LED时，需加小数点则用非零DOT来表示。
 #define DOT1  1
@@ -40,10 +40,10 @@ typedef enum {NO_PRESS = 0x00, KEY_DOWN = 0x55, KEY_KEEP = 0xff, KEY_UP = 0xaa} 
 typedef struct
 {
   enum_keyact key_buffer;
-  uint16_t key_time; //一个完整的取键过程为一个周期，两次循环，即约6＊8=48ms
+  uint16_t key_time;
 } struct_key;
 
-//定义指示灯的序号，1~9及所有
+//定义指示灯的序号，1~14及所有
 typedef enum {LAMP1 = 1, LAMP2 = 2, LAMP3 = 3, LAMP4 = 4, LAMP5 = 5, LAMP6 = 6, LAMP7 = 7, LAMP8 = 8,
               LAMP9 = 9, LAMP10 = 10, LAMP11 = 11, LAMP12 = 12, LAMP13 = 13, LAMP14 = 14, LAMP_ALL = 0XFF
              } enum_LAMP;
@@ -51,7 +51,8 @@ typedef enum {LAMP1 = 1, LAMP2 = 2, LAMP3 = 3, LAMP4 = 4, LAMP5 = 5, LAMP6 = 6, 
 class APP_TM1628: public TM1628 {
   public:
     APP_TM1628(uint8_t stb , uint8_t dio , uint8_t clk );
-    struct_key keys[20]; //在析构函数中和set_key_table()中，动态数组没搞对，先搞固定的。
+    struct_key keys[20]; //键状态数组，存的是按键号对应的按键状态。按键号=数组下标+1
+    //接上，在析构函数中和set_key_table()中，动态数组没搞对，先搞固定的。
     //struct_key *keys;
     //若更改物理七段LED顺序，设置新的映射表，缺省的逻辑LED显示器顺序（没有用表）无效。
     void set_dis_table(uint8_t const *p);
@@ -85,9 +86,15 @@ class APP_TM1628: public TM1628 {
     //涮新TM1628奇地址寄存器，实现显示。两个共阳七段LED或14个灯一起涮新
     void to_led_lamps(void);
 
+    //功能：取键子函数，结果存放于键盘缓冲区中keys[20]中，对键的四个动作都有描述
+    //        keys[i]的下标i=按键序号-1
+    //        如果存在按键映射表，只处理表中的几个键，
+    //       需被周期性地被调用。不需要消抖（消抖由芯片完成）。
     uint8_t get_key(void);
+    //功能：按键操作将某数进行加减的子程序。根据按键时长进行连续加减、加速加减、十倍百倍加减。
+    //      注意：key_No是对应的物理键号，是从1开始。
     uint16_t key_add_or_sub(uint8_t key_No, uint16_t variable,
-                                uint16_t max_or_min, uint8_t add,
+                                uint16_t max_or_min, uint8_t ISadd,
                                 uint8_t loop);
   private:
     //定义物理LED显示器与逻辑LED显示器的映射表
