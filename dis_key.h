@@ -1,4 +1,4 @@
-////////////////           TM1628驱动库的应用库      V0.6       //////////////
+////////////////           TM1628驱动库的应用库      V0.7       //////////////
 ////////////////     Copyright 2016-2018      by changser       //////////////
 ////////////////           changser@139.com                     //////////////
  
@@ -91,11 +91,15 @@ class APP_TM1628: public TM1628 {
     //        如果存在按键映射表，只处理表中的几个键，
     //       需被周期性地被调用。不需要消抖（消抖由芯片完成）。
     uint8_t get_key(void);
+    //功能：某键的KEY_UP或KEY_DOWN动作，其功能已被执行，改变键状态为KEY_KEEP或NO_PRESS，时间清0。
+    //      key_No是对应的物理键号，是从1开始。
+    uint8_t key_func_done(uint8_t key_No);
     //功能：按键操作将某数进行加减的子程序。根据按键时长进行连续加减、加速加减、十倍百倍加减。
-    //      注意：key_No是对应的物理键号，是从1开始。
+    //      注意：key_No是对应的物理键号，是从1开始。需周期性地被调用。一般20ms-50ms比较合适。 
     uint16_t key_add_or_sub(uint8_t key_No, uint16_t variable,
                                 uint16_t max_or_min, uint8_t ISadd,
                                 uint8_t loop);
+                                
   private:
     //定义物理LED显示器与逻辑LED显示器的映射表
     uint8_t const *dis_table_P = NULL;

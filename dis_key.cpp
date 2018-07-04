@@ -1,7 +1,7 @@
-////////////////           TM1628驱动库的应用库      V0.6       //////////////
+////////////////           TM1628驱动库的应用库      V0.7       //////////////
 ////////////////     Copyright 2016-2018      by changser       //////////////
 ////////////////           changser@139.com                     ///////////////////////////
- 
+
 #include  "dis_key.h"
 
 //定义显示段码表，表中每个元素有两个字节对应，一个ASCII，一个八段码。可以由ASCII查找八段码。
@@ -204,7 +204,7 @@ void APP_TM1628::to_led_clear(uint8_t start_led, uint8_t led_long)
 //输出：可能有APP_TM1628::twoCA，TM1628显示寄存器
 void APP_TM1628::to_led_seg(int8_t seg, uint8_t No)
 {
-  uint8_t temp1=0;
+  uint8_t temp1 = 0;
   temp1 = ledNo_to_ledLogNo(No);
   if (temp1 < 8)  //逻辑显示器1~7
   {
@@ -213,7 +213,7 @@ void APP_TM1628::to_led_seg(int8_t seg, uint8_t No)
   }
   else //逻辑显示器8、9
   {
-    uint16_t temp=0;
+    uint16_t temp = 0;
     if (temp1 == 8) //共阳LED，TM1628的SEG1对应奇地址显示寄存器，灯LAMP8~14
     {
       temp = twoCA & 0XFF;  //LAMP8~14存于高位字节。高位清0
@@ -387,7 +387,7 @@ void APP_TM1628::to_led_flash()
 //输入：  调用read_keyR()函数，再得key_state[key_num]
 //        其中，key_num是类的私有变量，初始值是20，设置映射时为物理按键个数。
 //        keys[key_num]
-//输出：keys[key_num]--更新
+//输出：keys[key_num]--更新;返回码？
 uint8_t APP_TM1628::get_key(void)
 {
   uint8_t i;
@@ -395,7 +395,7 @@ uint8_t APP_TM1628::get_key(void)
   read_keyR();    //得最新的键状态 key_R[5]
   //将TM1628的5字节的键盘缓冲区有实际物理键盘的状态摘出来
   uint8_t line, column, j;
-  for (i = 0; i < key_num; i++)   //key_num是类的私有变量，初始值是20，设置映射时为物理按键个数。 
+  for (i = 0; i < key_num; i++)   //key_num是类的私有变量，初始值是20，设置映射时为物理按键个数。
   {
     //i为物理键盘序号-1，转换为逻辑键盘序号-1，即key_table[0]对应的是物理键号1，存的是逻辑键号，比如1
     if (key_table_P == NULL) j = i; //若按键顺序没改变
@@ -449,6 +449,30 @@ uint8_t APP_TM1628::get_key(void)
   return (0);
 }
 
+//功能：某键的KEY_UP或KEY_DOWN动作，其功能已被执行，改变键状态为KEY_KEEP或NO_PRESS，时间清0。
+//      key_No是对应的物理键号，是从1开始。
+//输入：uint8_t key_No
+//      隐含输入keys[key_No-1]
+//输出：keys[key_No-1]，返回？
+uint8_t APP_TM1628::key_func_done(uint8_t key_No)
+{
+  //对key_No范围进行判断。
+  if ((key_No > 0) && (key_No <= 20))
+  {
+    if (keys[key_No - 1].key_buffer == KEY_DOWN)
+    {
+      keys[key_No - 1].key_buffer = KEY_KEEP;
+      keys[key_No - 1].key_time = 0;
+    }
+    else if (keys[key_No - 1].key_buffer == KEY_UP)
+    {
+      keys[key_No - 1].key_buffer = NO_PRESS;
+      keys[key_No - 1].key_time = 0;
+    }
+  }
+  return (0);
+}
+
 
 #define key_level1     6   //8            //达到key_level1就开始每扫描key_level1_num次就加1
 #define key_level1_num    6   //8
@@ -470,25 +494,25 @@ uint8_t APP_TM1628::get_key(void)
 //uint8_t loop：      非0则进行循环加减数，为0不徨。暂无此功能。
 //输出：返回处理过的variable
 uint16_t APP_TM1628::key_add_or_sub(uint8_t key_No, uint16_t variable,
-                                        uint16_t max_or_min, uint8_t ISadd, uint8_t loop)
+                                    uint16_t max_or_min, uint8_t ISadd, uint8_t loop)
 {
   uint16_t variable1;
   variable1 = variable;
-  if (keys[key_No-1].key_buffer != NO_PRESS)
+  if (keys[key_No - 1].key_buffer != NO_PRESS)
   {
     if (ISadd)
     {
-      if (keys[key_No-1].key_buffer == KEY_DOWN)
+      if (keys[key_No - 1].key_buffer == KEY_DOWN)
       {
         if (variable1 < max_or_min)
         { variable1++;
         };
       };
-      if (keys[key_No-1].key_buffer == KEY_KEEP)
+      if (keys[key_No - 1].key_buffer == KEY_KEEP)
       {
-        if (keys[key_No-1].key_time >= key_level3)
+        if (keys[key_No - 1].key_time >= key_level3)
         {
-          if (fmod((keys[key_No-1].key_time - key_level3), key_level3_num) == 0)
+          if (fmod((keys[key_No - 1].key_time - key_level3), key_level3_num) == 0)
           {
             if (max_or_min > 10) //如果达不到此要求就不进行加10操作
             {
@@ -505,9 +529,9 @@ uint16_t APP_TM1628::key_add_or_sub(uint8_t key_No, uint16_t variable,
         }
         else //不是 (key_time[key_No-1]>=key_level3)
         {
-          if (keys[key_No-1].key_time >= key_level2)
+          if (keys[key_No - 1].key_time >= key_level2)
           {
-            if (fmod((keys[key_No-1].key_time - key_level2), key_level2_num) == 0)
+            if (fmod((keys[key_No - 1].key_time - key_level2), key_level2_num) == 0)
             {
               if (variable1 < max_or_min)
               { variable1++;
@@ -516,9 +540,9 @@ uint16_t APP_TM1628::key_add_or_sub(uint8_t key_No, uint16_t variable,
           }
           else //不是(key_time[key_No]>=key_level2)
           {
-            if (keys[key_No-1].key_time >= key_level1)
+            if (keys[key_No - 1].key_time >= key_level1)
             {
-              if (fmod((keys[key_No-1].key_time - key_level1), key_level1_num) == 0)
+              if (fmod((keys[key_No - 1].key_time - key_level1), key_level1_num) == 0)
               {
                 if (variable1 < max_or_min)
                 { variable1++;
@@ -531,17 +555,17 @@ uint16_t APP_TM1628::key_add_or_sub(uint8_t key_No, uint16_t variable,
     }//加计数结束
     else //减计数
     {
-      if (keys[key_No-1].key_buffer == KEY_DOWN)
+      if (keys[key_No - 1].key_buffer == KEY_DOWN)
       {
         if (variable1 > max_or_min)
         { variable1--;
         };
       };
-      if (keys[key_No-1].key_buffer == KEY_KEEP)
+      if (keys[key_No - 1].key_buffer == KEY_KEEP)
       {
-        if (keys[key_No-1].key_time >= key_level3)
+        if (keys[key_No - 1].key_time >= key_level3)
         {
-          if (fmod((keys[key_No-1].key_time - key_level3), key_level3_num) == 0)
+          if (fmod((keys[key_No - 1].key_time - key_level3), key_level3_num) == 0)
           {
             if (variable1 >= max_or_min + 10)
             {
@@ -555,9 +579,9 @@ uint16_t APP_TM1628::key_add_or_sub(uint8_t key_No, uint16_t variable,
         }
         else //不是 (key_time[key_No-1]>=key_level3)
         {
-          if (keys[key_No-1].key_time >= key_level2)
+          if (keys[key_No - 1].key_time >= key_level2)
           {
-            if (fmod((keys[key_No-1].key_time - key_level2), key_level2_num) == 0)
+            if (fmod((keys[key_No - 1].key_time - key_level2), key_level2_num) == 0)
             {
               if (variable1 > max_or_min)
               { variable1--;
@@ -566,9 +590,9 @@ uint16_t APP_TM1628::key_add_or_sub(uint8_t key_No, uint16_t variable,
           }
           else //不是(key_time[key_No-1]>=key_level2)
           {
-            if (keys[key_No-1].key_time >= key_level1)
+            if (keys[key_No - 1].key_time >= key_level1)
             {
-              if (fmod((keys[key_No-1].key_time - key_level1), key_level1_num) == 0)
+              if (fmod((keys[key_No - 1].key_time - key_level1), key_level1_num) == 0)
               {
                 if (variable1 > max_or_min)
                 { variable1--;
