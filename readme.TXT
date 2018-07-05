@@ -123,9 +123,15 @@ a、类库提供一个数组和两个功能函数。
     //        如果存在按键映射表，只处理表中的几个键，keys[i]中序号i=物理按键序号-1
     //       应放在用户程序loop()之中，时间间隔基本恒定地（比如50ms）不断被调用。
     uint8_t get_key(void);
+    //功能：某键的KEY_UP或KEY_DOWN动作，其功能已被执行，改变键状态为KEY_KEEP或NO_PRESS，时间清0。
+    
+    //      key_No是对应的物理键号，是从1开始。
+    //      用法是放在某键的按下或松开判断之后的执行体中
+    uint8_t key_func_done(uint8_t key_No);
     //功能：按键操作将某数进行加减的子程序。根据按键时长进行连续加减、加速加减、十倍百倍加减。
     //       key_No是从0开始，对应着按键数组的序号（下标号）。
     //       应用时也是放在用户程序loop()之中，被调用间隔应是20~50ms，配合显示才能对达到按下键有加减1效果。
+    
     uint16_t key_add_or_sub(uint8_t key_No, uint16_t variable,
                                 uint16_t max_or_min, uint8_t add,
                                 uint8_t loop);
